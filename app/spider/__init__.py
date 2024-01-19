@@ -12,12 +12,14 @@ headers = {
     'User-Agent': User_Agent
 }
 
+# 教务处获取验证码的网址
+JWC_GETCODE_URL = 'http://sso.jwc.whut.edu.cn/Certification/getCode.do'
 
 # 教务处提交登陆信息网址 post login
 JWC_LOGIN_URL = 'http://sso.jwc.whut.edu.cn/Certification/login.do'
 
 # 选课系统地址
-COURSE_SYSTEM_URL = 'http://202.114.90.180/Course'
+COURSE_SYSTEM_URL = 'http://218.197.102.183/Course'
 
 # 忘记密码
 FORGET_PSW_MSG = '忘记密码'
@@ -25,10 +27,10 @@ FORGET_PSW_MSG = '忘记密码'
 # 以下选项用于 BeautifulSoup 做解析处理
 
 # 专业选课
-PROFESSIONAL_COURSE_MSG = '专业选课'
+PROFESSIONAL_COURSE_MSG = '专业课选课'
 
 # 公选课
-PUBLIC_COURSE_MSG = '公选课选课'
+PUBLIC_COURSE_MSG = '通识选修课选课'
 
 # 个性课程选课
 PERSONAL_COURSE_MSG = '个性课程选课'
@@ -56,4 +58,10 @@ PERSONAL_COURSE_TABLE_ID = 'gxkxk_wxkc_tb'
 BAIDU_INDEX_URL = 'https://baidu.com'
 
 # 公选课、个性课、英语体语翻页用的 post 链接 url
-GET_MORE_ITEM_URL = 'http://202.114.90.180/Course/gxkxkList.do'
+GET_MORE_ITEM_URL = 'http://218.197.102.183/Course/gxkxkList.do'
+
+#查询太频繁
+TOO_FREQUENTLY = '查询太频繁'
+
+#等待时间
+WAIT_TIME = 2

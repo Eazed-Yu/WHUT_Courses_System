@@ -3,15 +3,18 @@
 # @Mail : 1192126986@foxmail.com
 # @Time : 2017/11/24 14:00
 
+import hashlib
 import json
 import threading
+import time
+from bs4 import BeautifulSoup
 
 import requests
 
 from app import LOGIN_TIMEOUT_MESSAGE, DUPLICATE_COURSE_MESSAGE, NOT_IN_SELECT_TIME_MESSAGE, CONFLICT_IN_TIME_MESSAGE, CAPPED_CREDIT_MESSAGE, NO_ENOUGH_POSITION
 from app import SELECT_COURSE_MESSAGE
 
-from app.spider import headers, JWC_LOGIN_URL, COURSE_SYSTEM_URL
+from app.spider import JWC_GETCODE_URL, WAIT_TIME, headers, JWC_LOGIN_URL, COURSE_SYSTEM_URL
 
 local_thread = threading.local()
 
@@ -24,15 +27,40 @@ def request_index(account, password):
     :param password:
     :return:
     """
+        # 获取 HTML 内容
+    html_content = requests.get(JWC_LOGIN_URL).text
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # 提取 rnd 值
+    rnd = soup.find(id="rnd")['value']
+
+    # 生成一个随机的 webfinger(好像是硬编码的)
+    webfinger = "b9a7a7901c83c4c0dad90bd2bbf19498"
+
+    # 向服务器发送 webfinger 获取 code
+    code_response = requests.post(JWC_GETCODE_URL, data={"webfinger": webfinger})
+    
+    code = code_response.text
+    # 使用MD5加密用户名
+    md5_username = hashlib.md5(account.encode()).hexdigest()
+
+    # 使用SHA1加密用户名和密码的组合
+    sha1_password = hashlib.sha1((account + password).encode()).hexdigest()
     post_data = {
-        "systemId": "",
-        "xmlmsg": "",
-        "userName": account,
-        "password": password,
+        "MsgID": "",
+        "KeyID": "",
+        "UserName": "",
+        "Password": "",
+        "rnd": rnd,
+        "return_EncData": "",
+        "code": code,
+        "userName1": md5_username,
+        "password1": sha1_password,
+        "webfinger": webfinger,
+        "falg": "",
         "type": "xs",
-        # 教务处改变了登陆页面，原来 input button 有下面两项
-        # "imageField.x": "20",
-        # "imageField.y": "20"
+        "userName": "",
+        "password": ""
     }
     response = requests.post(url=JWC_LOGIN_URL, data=post_data, headers=headers)
     if 'CERLOGIN' in response.cookies.keys():
@@ -50,7 +78,6 @@ def request_courses():
     因为抢课在别的站点进行，这里教务处有一套多次重定向机制来同步教务处站点 sso.jwc.whut.edu.cn 与 202.114.90.180/Course/ 站点登陆状态
     :return:
     """
-    # course_url = 'http://202.114.90.180/Course/'
     response = requests.get(url=COURSE_SYSTEM_URL, cookies=local_thread.index_cookie, headers=headers, allow_redirects=True)
     if 'CERLOGIN' in response.request._cookies.keys():
         local_thread.course_cookie['JSESSIONID'] = response.request._cookies.values()[2]
@@ -74,10 +101,6 @@ def request_add_lesson(add_lession_url):
     6 ==> 达到学分上限
     7 ==> 课程容量不足
     """
-    tag = False
-    if tag:
-        # 模拟退出登录状态，也就是登录超时
-        r = requests.get(url='http://202.114.90.180/Course/logout.do', cookies=local_thread.course_cookie, headers=headers)
     try:
         response = requests.get(url=add_lession_url, cookies=local_thread.course_cookie, headers=headers)
     except requests.exceptions.ConnectionError as e:
@@ -88,39 +111,25 @@ def request_add_lesson(add_lession_url):
     except json.decoder.JSONDecodeError as e:
         # 在成功选课的时候返回一个 JSONP，是 (js/css/html) 的集合体，不是 json 对象无法解析
         return 0
-    else:
-        # 成功解析为 json，那么证明没有 成功选课
-        # 无论是否抢到课，返回的 http 状态码都是 200
-        # 如果抢课失败，（登陆超时、重复选课、未到选课时间）返回的都是 200 状态码
-        # 但是会返回一个 JSON {"message": "xxx", "statusCode": "300"}
-        # 如果成功抢课，那么返回一个 JSONP (js / html / css)
-        #  {"message": "登录超时，请重新登录！", "statusCode": "300"}
-        #  {"message": "课程重复，不能选已选课程", "statusCode": "300"}
-        #  {"message": "目前不在选课时间，不能选课", "statusCode": "300"}
-        #  {"message": "该课程与已选课程上课时间冲突", "statusCode": "300"}
-        #  {"message": "该门课程容量不足，选课失败", "statusCode": "300"}
-        #  {"message": "你所选的课程的课程性质已超出了限制的可选门数，不能选择此课程性质的课程！", "statusCode": "300"}
-        #  http 返回状态码为 200 则成功选到了课程
-        # 进一步分析 message 信息
-        response_message = response_data.get(SELECT_COURSE_MESSAGE)
-        if response_message == LOGIN_TIMEOUT_MESSAGE:
-            # 登陆超时
-            return 1
-        elif response_message == NOT_IN_SELECT_TIME_MESSAGE:
-            # 未到选课时间
-            return 2
-        elif response_message == DUPLICATE_COURSE_MESSAGE:
-            # 重复选课
-            return 3
-        elif response_message == CONFLICT_IN_TIME_MESSAGE:
-            # 选课时间冲突
-            return 5
-        elif response_message == CAPPED_CREDIT_MESSAGE:
-            # 你所选的课程的课程性质已超出了限制的可选门数，不能选择此课程性质的课程！
-            return 6
-        elif response_message == NO_ENOUGH_POSITION:
-            # 课程容量不足
-            return 7
+    response_message = response_data.get(SELECT_COURSE_MESSAGE)
+    if response_message == LOGIN_TIMEOUT_MESSAGE:
+        # 登陆超时
+        return 1
+    elif response_message == NOT_IN_SELECT_TIME_MESSAGE:
+        # 未到选课时间
+        return 2
+    elif response_message == DUPLICATE_COURSE_MESSAGE:
+        # 重复选课
+        return 3
+    elif response_message == CONFLICT_IN_TIME_MESSAGE:
+        # 选课时间冲突
+        return 5
+    elif response_message == CAPPED_CREDIT_MESSAGE:
+        # 你所选的课程的课程性质已超出了限制的可选门数，不能选择此课程性质的课程！
+        return 6
+    elif response_message == NO_ENOUGH_POSITION:
+        # 课程容量不足
+        return 7
     return -1
 
 
@@ -132,6 +141,7 @@ def start_request(username, password, lesson_url, tasks):
     # 默认初始状态为 1, 为登陆超时，需要重新登陆操作
     status = 1
     while True:
+        time.sleep(WAIT_TIME)
         # 还没有获得登陆状态，在登陆超时、未连接上服务器情况下需要重新模拟登陆
         # 其他状态不需要重新模拟登陆
         if status in (1, 4, -1):

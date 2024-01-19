@@ -68,7 +68,7 @@ class MainApp(tk.Tk):
         """
         # self.geometry() 为了适应子页面大小，重新重新缩放窗口
         if page_name == LoginPage.__name__:
-            self.geometry('450x320')
+            self.geometry('450x350')
         elif page_name == ChooseCoursePage.__name__:
             self.geometry('1300x700')
             # 刷新课程信息展示
@@ -116,6 +116,7 @@ class LoginPage(tk.Frame):
         # 记录用户名和密码
         self.username = tk.StringVar()
         self.password = tk.StringVar()
+        tk.Label(self, text='不要在选课期间爬取课程', font=ARIAL_16_FONT).place(x=110, y=260)
 
         tk.Label(self, text='username:', font=ARIAL_16_FONT).place(x=20, y=150)
         tk.Label(self, text='password:', font=ARIAL_16_FONT).place(x=20, y=190)
@@ -194,8 +195,8 @@ class LoginPage(tk.Frame):
             else:
                 self.psw_entry.config(show='*')
 
-        tk.Button(self, text='More info', command=more, font=ARIAL_16_FONT).place(x=100, y=260)
-        tk.Button(self, text='Start up', command=start_up, font=ARIAL_16_FONT).place(x=250, y=260)
+        tk.Button(self, text='More info', command=more, font=ARIAL_16_FONT).place(x=100, y=300)
+        tk.Button(self, text='Start up', command=start_up, font=ARIAL_16_FONT).place(x=250, y=300)
         self.show_psw_img = ImageTk.PhotoImage(Image.open(os.path.join(ASSERT_DIR, 'show.png')))
         self.show_psw_btn = tk.Button(self, image=self.show_psw_img, command=show_psw_btn_command)
         self.show_psw_btn.place(x=390, y=195)
@@ -240,7 +241,19 @@ class ChooseCoursePage(tk.Frame):
             :return:
             """
             # 需要展示的信息
-            info = [item[TEACHER], item[LESSON_TYPE], '学分：{}'.format(item[CREDIT]), '容量：{}已选：{}'.format(item[CAPACITY], item[SELECTED]), item[CLASSROOM], item[TIME]]
+            # 定义一个内部函数来检查每个字段是否为空
+            def check_or_default(value, default="未提供"):
+                return value if value else default
+
+            # 使用 check_or_default 函数来确保每个字段不为空
+            info = [
+                check_or_default(item.get(TEACHER)),
+                check_or_default(item.get(LESSON_TYPE)),
+                '学分：{}'.format(check_or_default(item.get(CREDIT))),
+                '容量：{}已选：{}'.format(check_or_default(item.get(CAPACITY)), check_or_default(item.get(SELECTED))),
+                check_or_default(item.get(CLASSROOM), "教室：未提供"),
+                check_or_default(item.get(TIME), "时间：未提供")
+            ]
 
             # info = [item[TEACHER], item[LESSON_TYPE], '学分：{}'.format(item[CREDIT]),
             #         '容量：{}'.format(item[CAPACITY]), '已选：{}'.format(item[SELECTED])]

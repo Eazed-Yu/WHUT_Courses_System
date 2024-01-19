@@ -45,7 +45,7 @@ PERSONAL_COURSES_JSON_FILE_NAME = 'whut_personal_lesson.json'
 # 公选课
 ELECTIVE_COURSES_JSON_FILE_NAME = 'whut_gx_lesson.json'
 
-# 英语体语
+# 英语体育
 EN_PT_COURSES_JSON_FILE_NAME = 'whut_en_pe_lesson.json'
 
 # "专业课" 名字
@@ -55,9 +55,9 @@ PROFESSIONAL_COURSES_SHOW_NAME = '专业课'
 PERSONAL_COURSES_SHOW_NAME = '个性课'
 
 # "公选课" 名字
-ELECTIVE_COURSES_SHOW_NAME = '公选课'
+ELECTIVE_COURSES_SHOW_NAME = '通识选修课'
 
-EN_PE_COURSES_SHOW_NAME = '英语体语'
+EN_PE_COURSES_SHOW_NAME = '英语体育课'
 
 # 登陆超时 message
 LOGIN_TIMEOUT_MESSAGE = '登录超时，请重新登录！'

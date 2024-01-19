@@ -3,13 +3,12 @@
 # author: XiGuang Liu<g10guang@foxmail.com>
 # 2017/11/28 15:12
 # function: 
-
 import requests
-
+from bs4 import BeautifulSoup
 from app.spider import headers
-from app.spider import JWC_LOGIN_URL, BAIDU_INDEX_URL
+from app.spider import JWC_LOGIN_URL, BAIDU_INDEX_URL, JWC_GETCODE_URL
 
-
+import hashlib
 def validate_user(account, password):
     """
     验证用户身份，尝试登陆教务处，判断身份是否正确
@@ -20,12 +19,43 @@ def validate_user(account, password):
     1 ==> 用户与密码匹配
     2 ==> 无法连接网络
     """
+    
+
+    # 获取 HTML 内容
+    html_content = requests.get(JWC_LOGIN_URL).text
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # 提取 rnd 值
+    rnd = soup.find(id="rnd")['value']
+
+    # 生成一个随机的 webfinger(好像是硬编码的)
+    webfinger = "b9a7a7901c83c4c0dad90bd2bbf19498"
+
+    # 向服务器发送 webfinger 获取 code
+    code_response = requests.post(JWC_GETCODE_URL, data={"webfinger": webfinger})
+    
+    code = code_response.text
+    # 使用MD5加密用户名
+    md5_username = hashlib.md5(account.encode()).hexdigest()
+
+    # 使用SHA1加密用户名和密码的组合
+    sha1_password = hashlib.sha1((account + password).encode()).hexdigest()
+    
     post_data = {
-        "systemId": "",
-        "xmlmsg": "",
-        "userName": account,
-        "password": password,
+        "MsgID": "",
+        "KeyID": "",
+        "UserName": "",
+        "Password": "",
+        "rnd": rnd,
+        "return_EncData": "",
+        "code": code,
+        "userName1": md5_username,
+        "password1": sha1_password,
+        "webfinger": webfinger,
+        "falg": "",
         "type": "xs",
+        "userName": "",
+        "password": ""
     }
     keep_request = True
     while keep_request:

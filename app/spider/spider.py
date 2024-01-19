@@ -5,6 +5,9 @@
 # function: 使用 requests 和 BeautifulSoup 组合获取教务处网站的课程信息
 # 以下操作默认在用户名和密码正确前提下进行
 
+import ctypes
+import hashlib
+import time
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -12,7 +15,7 @@ import os
 import threading
 import re
 from urllib import parse
-from app.spider import JWC_LOGIN_URL, headers, COURSE_SYSTEM_URL, PROFESSIONAL_COURSE_MSG, PUBLIC_COURSE_MSG, PERSONAL_COURSE_MSG, BEAUTIFUL_SOUP_PARSE_METHOD, PROFESSIONAL_COURSE_TABLE_ID, PUBLIC_COURSE_TABLE_ID, PERSONAL_COURSE_TABLE_ID, EN_PE_COURSE_MSG, GET_MORE_ITEM_URL
+from app.spider import JWC_GETCODE_URL, JWC_LOGIN_URL, WAIT_TIME, headers, COURSE_SYSTEM_URL, PROFESSIONAL_COURSE_MSG, PUBLIC_COURSE_MSG, PERSONAL_COURSE_MSG, BEAUTIFUL_SOUP_PARSE_METHOD, PROFESSIONAL_COURSE_TABLE_ID, PUBLIC_COURSE_TABLE_ID, PERSONAL_COURSE_TABLE_ID, EN_PE_COURSE_MSG, GET_MORE_ITEM_URL
 from app import PROFESSIONAL_COURSES_JSON_FILE_NAME, PERSONAL_COURSES_JSON_FILE_NAME, ELECTIVE_COURSES_JSON_FILE_NAME, EN_PT_COURSES_JSON_FILE_NAME
 from app import LESSON_NAME, LESSON_URL, TEACHER, TIME, CLASSROOM, CAPACITY, SELECTED, THIS_SELECTED, LESSON_TYPE, CREDIT, REMARK, LANG_LEVEL
 
@@ -35,6 +38,7 @@ def get_courses_info(username, password, user_folder):
     index_html = login_course_system(sess)
     url_dict = get_course_url(index_html)
 
+    """"
     # 多线程版本
     t1 = threading.Thread(target=thread_task, args=(parse_professional_courses, sess, os.path.join(user_folder, PROFESSIONAL_COURSES_JSON_FILE_NAME), url_dict[PROFESSIONAL_COURSE_MSG]))
 
@@ -53,7 +57,40 @@ def get_courses_info(username, password, user_folder):
     t2.join()
     t3.join()
     t4.join()
+    """
+    # 使用单线程，避免访问过多
+    thread_task(parse_professional_courses, sess, os.path.join(user_folder, PROFESSIONAL_COURSES_JSON_FILE_NAME),
+                url_dict[PROFESSIONAL_COURSE_MSG])
+    ctypes.windll.user32.MessageBoxW(0, "已完成：" + PROFESSIONAL_COURSE_MSG, "进度", 1)
+    thread_task(parse_courses, sess, os.path.join(user_folder, PERSONAL_COURSES_JSON_FILE_NAME),
+                url_dict[PERSONAL_COURSE_MSG])
+    ctypes.windll.user32.MessageBoxW(0, "已完成：" + PERSONAL_COURSE_MSG, "进度", 1)
+    thread_task(parse_courses, sess, os.path.join(user_folder, EN_PT_COURSES_JSON_FILE_NAME),
+                url_dict[EN_PE_COURSE_MSG])
+    ctypes.windll.user32.MessageBoxW(0, "已完成：" + EN_PE_COURSE_MSG, "进度", 1)
+    thread_task(parse_courses, sess, os.path.join(user_folder, ELECTIVE_COURSES_JSON_FILE_NAME),
+                url_dict[PUBLIC_COURSE_MSG])
+    ctypes.windll.user32.MessageBoxW(0, "已完成：" + PUBLIC_COURSE_MSG, "进度", 1)
 
+def get_html(url, sess, headers):
+    """
+    获取 html
+    :param url:
+    :param sess:
+    :return:
+    """
+    rspo = None
+    wait_time = WAIT_TIME
+    while True:
+        time.sleep(wait_time)
+        rspo = sess.get(url, headers=headers)
+        if rspo.status_code == 200 and "查询太频繁" not in rspo.text:
+            break
+        wait_time += 1
+        if wait_time > 10:
+            ctypes.windll.user32.MessageBoxW(0, "错误原因：" + rspo.text, "错误", 1)
+            exit(0)
+    return rspo
 
 def thread_task(parse_func, sess, file_path, urls):
     """
@@ -76,12 +113,41 @@ def login_jwc(username, password, sess):
     :param sess: Session 会话
     :return:
     """
+    # 获取 HTML 内容
+    html_content = requests.get(JWC_LOGIN_URL).text
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # 提取 rnd 值
+    rnd = soup.find(id="rnd")['value']
+
+    # 生成一个随机的 webfinger(好像是硬编码的)
+    webfinger = "b9a7a7901c83c4c0dad90bd2bbf19498"
+
+    # 向服务器发送 webfinger 获取 code
+    code_response = requests.post(JWC_GETCODE_URL, data={"webfinger": webfinger})
+    
+    code = code_response.text
+    # 使用MD5加密用户名
+    md5_username = hashlib.md5(username.encode()).hexdigest()
+
+    # 使用SHA1加密用户名和密码的组合
+    sha1_password = hashlib.sha1((username + password).encode()).hexdigest()
+    
     login_form = {
-        "systemId": "",
-        "xmlmsg": "",
-        "userName": username,
-        "password": password,
+        "MsgID": "",
+        "KeyID": "",
+        "UserName": "",
+        "Password": "",
+        "rnd": rnd,
+        "return_EncData": "",
+        "code": code,
+        "userName1": md5_username,
+        "password1": sha1_password,
+        "webfinger": webfinger,
+        "falg": "",
         "type": "xs",
+        "userName": "",
+        "password": ""
     }
     # 登陆教务处，将会拿到 cookie
     rspo = sess.post(JWC_LOGIN_URL, data=login_form, headers=headers)
@@ -94,6 +160,7 @@ def login_course_system(sess):
     :return: 返回选课系统的首页 html 用于后续 BeautifulSoup 做分析
     """
     # 将会被多次重定向，从而达到登陆状态
+    time.sleep(WAIT_TIME)
     rspo = sess.get(COURSE_SYSTEM_URL, headers=headers, allow_redirects=True)
     return rspo.text
 
@@ -130,7 +197,8 @@ def parse_professional_courses(url, sess):
     :param url: 获取专业课信息的 url
     :return:
     """
-    rspo = sess.get(url, headers=headers)
+    time.sleep(WAIT_TIME)
+    rspo = get_html(url, sess, headers)
     soup = BeautifulSoup(rspo.text, BEAUTIFUL_SOUP_PARSE_METHOD)
     # 各个课程信息的父节点
     tree_folder = soup.find('ul', class_='tree treeFolder')
@@ -154,7 +222,7 @@ def parse_courses(url, sess):
     :param sess:
     :return:
     """
-    repo = sess.get(url, headers=headers)
+    repo = get_html(url, sess, headers)
     soup = BeautifulSoup(repo.text, BEAUTIFUL_SOUP_PARSE_METHOD)
     # 找到展示树
     tree_folder = soup.find('ul', class_='tree treeFolder')
@@ -182,7 +250,7 @@ def access_url_and_extract_courses_info(courses_url, sess, table_id, parse_metho
     """
     courses_info = []
     for url in courses_url:
-        tmp_resp = sess.get(url, headers=headers)
+        tmp_resp = get_html(url, sess, headers)
         tmp_soup = BeautifulSoup(tmp_resp.text, BEAUTIFUL_SOUP_PARSE_METHOD)
         lesson_info = parse_method(tmp_soup, table_id, sess)
         courses_info.extend(lesson_info)
@@ -214,6 +282,7 @@ def get_professional_courses_info_from_table(soup, table_id, sess):
             tmp_dict[LESSON_URL] = '{}/{}'.format(COURSE_SYSTEM_URL, add_url.format(suid_obj=tr['rel']))
             # 课程名称
             tmp_dict[LESSON_NAME] = td_list[1].find('a').string
+            print(tmp_dict[LESSON_NAME])
             # 老师
             tmp_dict[TEACHER] = td_list[2].find('a').string
             # 上课时间
@@ -292,6 +361,7 @@ def get_courses_info_from_table(soup, table_id, sess):
         # 在"英语体育课选课" flag=2
         # 这里暂且不考虑 个性课
         data['flag'] = '2'
+        time.sleep(WAIT_TIME)
         rspo = sess.post(GET_MORE_ITEM_URL, headers=headers, data=data)
         soup = BeautifulSoup(rspo.text, BEAUTIFUL_SOUP_PARSE_METHOD)
     elif item_num == 0:
@@ -310,6 +380,7 @@ def get_courses_info_from_table(soup, table_id, sess):
             tmp_dict[LESSON_URL] = '{}/{}'.format(COURSE_SYSTEM_URL, add_url.format(suid_obj=tr['rel']))
             # 课程名称
             tmp_dict[LESSON_NAME] = td_list[1].find('a').string
+            print(tmp_dict[LESSON_NAME])
             # 老师
             tmp_dict[TEACHER] = td_list[2].find('a').string
             # 上课时间
