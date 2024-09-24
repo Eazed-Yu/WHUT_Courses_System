@@ -1,3 +1,6 @@
+# 2324年选课系统更新，此项目已经无法使用，并且暂无更新计划。
+
+
 [Download](https://github.com/g10guang/WHUT_Courses_System/raw/master/release/WHUT1.0.zip)
 
 如有发现任何问题，可以邮件联系我 [g10guang@foxmail.com](g10guang@foxmail.com)，或者 github 上提交 Issue。
